@@ -1,46 +1,83 @@
 import sys
-import re
+
+class Token:
+    def __init__(self, _type, _value):
+        self.type = _type
+        self.value = _value
+
+class Tokenizer:
+    def __init__(self, _origin):
+        self.origin = str(_origin)
+        self.position = 0
+        self.actual = Token("INT", ' ')
+        self.selectNext()
+
+    def selectNext(self):
+        while self.position < len(self.origin) and self.origin[self.position] == ' ':
+            self.position += 1
+
+        if self.position == len(self.origin):
+            self.actual = Token('EOF', 'EOF')
+
+        elif self.origin[self.position].isnumeric():
+            num = ''
+            while self.position < len(self.origin) and self.origin[self.position].isnumeric():
+                num = num + self.origin[self.position]
+                # print("aloooooo", num)
+                self.position += 1
+            self.actual = Token('INT', int(num))
+
+        elif self.origin[self.position] == "+":
+            self.position += 1
+            self.actual = Token('PLUS','+')
+        
+        elif self.origin[self.position] == '-':
+            self.position += 1
+            self.actual = Token('MINUS','-')
+        
+        else:
+            raise ValueError('Erro')
+        return self.actual
+    
+class Parser:
+    @staticmethod
+    def parseExpression():
+        if Parser.tokens.actual.type == "INT":
+            result = Parser.tokens.actual.value
+            Parser.tokens.selectNext()
+            
+            while Parser.tokens.actual.type == "PLUS" or Parser.tokens.actual.type == "MINUS":
+                if Parser.tokens.actual.value == "+":
+                    Parser.tokens.selectNext()
+                    
+                    if Parser.tokens.actual.type == "INT":
+                        
+                        result += Parser.tokens.actual.value
+                    else:
+                        raise ValueError('Erro')
+                if Parser.tokens.actual.value == "-":
+                    Parser.tokens.selectNext()
+                    if Parser.tokens.actual.type == "INT":
+                        result -= Parser.tokens.actual.value
+                    else:
+                        raise ValueError('Erro')
+                Parser.tokens.selectNext()
+            return result
+        else: 
+            raise ValueError('Erro')
+
+    @staticmethod
+    def run(code):
+        Parser.tokens = Tokenizer(code)
+        return Parser.parseExpression()
+
 
 def main(argv):
-    try:
-        
-        n = re.split("[+-]", argv[0])
-        print(n)
+    # print(type(argv[0]))
+    # print(argv[0])
+    
+    return Parser.run(argv[0])
 
-        for i in range(len(n)):
-            count = 0
-            for e in n[i].split(" "):
-                if e.isnumeric():
-                    count +=1
-                if count > 1:
-                    print("[ERRO] numero separado por espaço")
-                    break
-            
-            if n[i].replace(" ","").isnumeric() == False:
-                n[i] = '0'
-            n[i] = n[i].replace(" ","")
-        print(n)
-        
-        op = []
-        operations = ['+','-']
-
-        for i in argv[0]:
-            if i in operations:
-                op.append(i)
-        print(op)
-
-        if len(n) > 1:
-            calc = float(n[0])
-            for i in range(len(n) - 1):
-                if op[i] == '+':
-                    calc += float(n[i + 1])
-                elif op[i] == '-':
-                    calc -= float(n[i + 1])
-        else:
-            calc = float(n[0])
-        print(calc)
-    except:
-        print("Error")
 
 if __name__ == "__main__":
-   main(sys.argv[1:])
+   print(main(sys.argv[1:]))
