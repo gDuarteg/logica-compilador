@@ -23,7 +23,6 @@ class Tokenizer:
             num = ''
             while self.position < len(self.origin) and self.origin[self.position].isnumeric():
                 num = num + self.origin[self.position]
-                # print("aloooooo", num)
                 self.position += 1
             self.actual = Token('INT', int(num))
 
@@ -46,12 +45,14 @@ class Parser:
             result = Parser.tokens.actual.value
             Parser.tokens.selectNext()
             
+            if Parser.tokens.actual.type == "INT":
+                raise ValueError('Erro')
+
             while Parser.tokens.actual.type == "PLUS" or Parser.tokens.actual.type == "MINUS":
                 if Parser.tokens.actual.value == "+":
                     Parser.tokens.selectNext()
                     
                     if Parser.tokens.actual.type == "INT":
-                        
                         result += Parser.tokens.actual.value
                     else:
                         raise ValueError('Erro')
@@ -62,6 +63,9 @@ class Parser:
                     else:
                         raise ValueError('Erro')
                 Parser.tokens.selectNext()
+                
+                if Parser.tokens.actual.type == "INT":
+                    raise ValueError('Erro')
             return result
         else: 
             raise ValueError('Erro')
@@ -73,9 +77,6 @@ class Parser:
 
 
 def main(argv):
-    # print(type(argv[0]))
-    # print(argv[0])
-    
     return Parser.run(argv[0])
 
 
