@@ -1,12 +1,14 @@
 # logica-compilador
 
-### EBNF
+## EBNF
 
-EXPRESSION = TERM, {("+" | "-"), TERM} ;
+EXPRESSION = TERM, { ("+" | "-"), TERM } ;
 
-TERM = NUMBER, {("*" | "/"), NUMBER} ;
+TERM = FACTOR, { ("*" | "/"), FACTOR } ;
+
+FACTOR = ("+" | "-"), FACTOR | "(", EXPRESSION,")" | number ;
 
 
-### Diagrama Sintático
+## Diagrama Sintático
 
 ![alt text](https://github.com/gDuarteg/logica-compilador/blob/main/ds.png)

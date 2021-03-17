@@ -42,6 +42,14 @@ class Tokenizer:
         elif self.origin[self.position] == '/':
             self.position += 1
             self.actual = Token('DIV','/')
+
+        elif self.origin[self.position] == '(':
+            self.position += 1
+            self.actual = Token('OPEN','(')
+        
+        elif self.origin[self.position] == ')':
+            self.position += 1
+            self.actual = Token('CLOSE',')')
         
         else:
             raise ValueError('Erro')
@@ -49,33 +57,50 @@ class Tokenizer:
     
 class Parser:
     @staticmethod
-    def term():
+    def factor():
         if Parser.tokens.actual.type == "INT":
             result = Parser.tokens.actual.value
             Parser.tokens.selectNext()
             
             if Parser.tokens.actual.type == "INT":
                 raise ValueError('Erro')
+            return result
         
-            while Parser.tokens.actual.type == "MULT" or Parser.tokens.actual.type == "DIV":
-                if Parser.tokens.actual.value == "*":
-                    Parser.tokens.selectNext()
-                    if Parser.tokens.actual.type == "INT":
-                        result *= Parser.tokens.actual.value
-                    else:
-                        raise ValueError('Erro')
-
-                if Parser.tokens.actual.value == "/":
-                    Parser.tokens.selectNext()
-                    if Parser.tokens.actual.type == "INT":
-                        result //= Parser.tokens.actual.value
-                    else:
-                        raise ValueError('Erro')
+        elif Parser.tokens.actual.type == "OPEN":
+            
+            Parser.tokens.selectNext()
+            result = Parser.parseExpression()
+            if Parser.tokens.actual.type == "CLOSE":
                 Parser.tokens.selectNext()
-                if Parser.tokens.actual.type == "INT":
-                    raise ValueError('Erro')
+                return result
+            else:
+                raise ValueError("Erro")
+        
+        elif Parser.tokens.actual.type == "PLUS":
+            Parser.tokens.selectNext()
+            return Parser.factor()
+
+        elif Parser.tokens.actual.type == "MINUS":
+            Parser.tokens.selectNext()
+            return -Parser.factor()
+
+        # print(Parser.tokens.actual.type)
         else:
             raise ValueError('Erro')
+        
+        return result
+
+    @staticmethod
+    def term():
+        result = Parser.factor()
+        while Parser.tokens.actual.type == "MULT" or Parser.tokens.actual.type == "DIV":
+            if Parser.tokens.actual.value == "*":
+                Parser.tokens.selectNext()
+                result *= Parser.factor()
+
+            if Parser.tokens.actual.value == "/":
+                Parser.tokens.selectNext()
+                result //= Parser.factor()
         return result
 
     @staticmethod
@@ -85,27 +110,25 @@ class Parser:
         while Parser.tokens.actual.type == "PLUS" or Parser.tokens.actual.type == "MINUS":
             if Parser.tokens.actual.value == "+":
                 Parser.tokens.selectNext()
-                
-                if Parser.tokens.actual.type == "INT":
-                    result += Parser.term()
-                else:
-                    raise ValueError('Erro')
+                result += Parser.term()
+
             if Parser.tokens.actual.value == "-":
                 Parser.tokens.selectNext()
-                if Parser.tokens.actual.type == "INT":
-                    result -= Parser.term()
-                else:
-                    raise ValueError('Erro')
-
-        Parser.tokens.selectNext()
-        if Parser.tokens.actual.type != "EOF": 
-            raise ValueError('Erro')
+                result -= Parser.term()
         return result
 
     @staticmethod
     def run(code):
         Parser.tokens = Tokenizer(code)
-        return Parser.parseExpression()
+        result = Parser.parseExpression()
+
+        if Parser.tokens.actual.type == "CLOSE": 
+            raise ValueError('Erro')
+        
+        Parser.tokens.selectNext()
+        if Parser.tokens.actual.type != "EOF": 
+            raise ValueError('Erro')
+        return result
 
 class PrePro:
     @staticmethod
@@ -114,7 +137,6 @@ class PrePro:
 
 def main(code):
     code = PrePro.filter(code)
-    #print(code)
     return Parser.run(code)
 
 if __name__ == "__main__":
