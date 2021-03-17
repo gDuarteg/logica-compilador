@@ -71,6 +71,9 @@ class Parser:
                         result //= Parser.tokens.actual.value
                     else:
                         raise ValueError('Erro')
+                Parser.tokens.selectNext()
+                if Parser.tokens.actual.type == "INT":
+                    raise ValueError('Erro')
         else:
             raise ValueError('Erro')
         return result
