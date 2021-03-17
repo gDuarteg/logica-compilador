@@ -111,7 +111,7 @@ class PrePro:
 
 def main(code):
     code = PrePro.filter(code)
-    print(code)
+    #print(code)
     return Parser.run(code)
 
 if __name__ == "__main__":
