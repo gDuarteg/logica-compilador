@@ -61,13 +61,11 @@ class Parser:
         if Parser.tokens.actual.type == "INT":
             result = Parser.tokens.actual.value
             Parser.tokens.selectNext()
-            
             if Parser.tokens.actual.type == "INT":
                 raise ValueError('Erro')
-            return result
+            return IntVal(result, [])
         
         elif Parser.tokens.actual.type == "OPEN":
-            
             Parser.tokens.selectNext()
             result = Parser.parseExpression()
             if Parser.tokens.actual.type == "CLOSE":
@@ -78,44 +76,48 @@ class Parser:
         
         elif Parser.tokens.actual.type == "PLUS":
             Parser.tokens.selectNext()
-            return Parser.factor()
+            result = Parser.factor()
+            return UnOp('+', [result]) 
 
         elif Parser.tokens.actual.type == "MINUS":
             Parser.tokens.selectNext()
-            return -Parser.factor()
+            result = Parser.factor()
+            return UnOp('-', [result]) 
 
-        # print(Parser.tokens.actual.type)
         else:
             raise ValueError('Erro')
-        
+
         return result
 
     @staticmethod
     def term():
-        result = Parser.factor()
+        left = Parser.factor()
         while Parser.tokens.actual.type == "MULT" or Parser.tokens.actual.type == "DIV":
             if Parser.tokens.actual.value == "*":
                 Parser.tokens.selectNext()
-                result *= Parser.factor()
+                right = Parser.term()
+                left = BinOp('*',[left,right])
 
             if Parser.tokens.actual.value == "/":
                 Parser.tokens.selectNext()
-                result //= Parser.factor()
-        return result
+                right = Parser.term()
+                left = BinOp('/',[left,right])
+        return left
 
     @staticmethod
     def parseExpression():
-        
-        result = Parser.term()
+        left = Parser.term()
         while Parser.tokens.actual.type == "PLUS" or Parser.tokens.actual.type == "MINUS":
             if Parser.tokens.actual.value == "+":
                 Parser.tokens.selectNext()
-                result += Parser.term()
+                right = Parser.term()
+                left = BinOp('+',[left,right])
 
             if Parser.tokens.actual.value == "-":
                 Parser.tokens.selectNext()
-                result -= Parser.term()
-        return result
+                right = Parser.term()
+                left = BinOp('-',[left,right])
+        return left
 
     @staticmethod
     def run(code):
@@ -123,21 +125,73 @@ class Parser:
         result = Parser.parseExpression()
 
         if Parser.tokens.actual.type == "CLOSE": 
-            raise ValueError('Erro')
+            raise ValueError('Erro CLOSE')
         
         Parser.tokens.selectNext()
         if Parser.tokens.actual.type != "EOF": 
+            raise ValueError('Erro EOF')
+        return result.Evaluate()
+
+class Node:
+    def __init__(self, _value, _children):
+        self.value = _value
+        self.children = _children
+    
+    def Evaluate(self):
+        pass
+
+class BinOp(Node):
+    def __init__(self, value, children):
+        super().__init__(value, children)
+    
+    def Evaluate(self):
+        if self.value == "+":
+            return self.children[0].Evaluate() + self.children[1].Evaluate()
+        elif self.value == "-":
+            return self.children[0].Evaluate() - self.children[1].Evaluate()
+        elif self.value == "*":
+            return self.children[0].Evaluate() * self.children[1].Evaluate()
+        elif self.value == "/":
+            return self.children[0].Evaluate() / self.children[1].Evaluate()
+        else:
             raise ValueError('Erro')
-        return result
+        
+class UnOp(Node):
+    def __init__(self, value, children):
+        super().__init__(value, children)
+
+    def Evaluate(self):
+        if self.value == "+":
+            return self.children[0].Evaluate()
+        elif self.value == "-":
+            return -self.children[0].Evaluate()
+        else:
+            raise ValueError('Erro')
+
+class IntVal(Node):
+    def __init__(self, value, children):
+        super().__init__(value, children)
+    
+    def Evaluate(self):
+        return self.value
+
+class NoOp(Node):
+    def __init__(self, value, children):
+        super().__init__(value, children)
+
+    def Evaluate(self):
+        pass
 
 class PrePro:
     @staticmethod
     def filter(code):
         return re.sub(r'/\*.*?\*/',"", code)
 
-def main(code):
+def main(file_name):
+    code = open(file_name, 'r').read()
     code = PrePro.filter(code)
-    return Parser.run(code)
+    result = Parser.run(code)
+    print(int(result))
 
 if __name__ == "__main__":
-   print(main(sys.argv[1:][0]))
+    main(sys.argv[1:][0])
