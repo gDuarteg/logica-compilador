@@ -152,7 +152,7 @@ class BinOp(Node):
         elif self.value == "*":
             return self.children[0].Evaluate() * self.children[1].Evaluate()
         elif self.value == "/":
-            return self.children[0].Evaluate() // self.children[1].Evaluate()
+            return self.children[0].Evaluate() / self.children[1].Evaluate()
         else:
             raise ValueError('Erro')
         
@@ -167,7 +167,6 @@ class UnOp(Node):
             return -self.children[0].Evaluate()
         else:
             raise ValueError('Erro')
-
 
 class IntVal(Node):
     def __init__(self, value, children):
@@ -188,14 +187,11 @@ class PrePro:
     def filter(code):
         return re.sub(r'/\*.*?\*/',"", code)
 
-def main():
-    line_n = 0 # linha do codigo que sera lida
-    with open('teste.c', 'r') as code:
-        code = str(code.readlines()[line_n][3:-1])
-
+def main(file_name):
+    code = open(file_name, 'r').read()
     code = PrePro.filter(code)
     result = Parser.run(code)
-    print(result)
+    print(int(result))
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:][0])
