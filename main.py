@@ -241,7 +241,7 @@ class Println(Node):
         super().__init__(value, children)
     
     def Evaluate(self, symbol_table):
-        print(self.children[0].Evaluate(symbol_table))
+        print(int(self.children[0].Evaluate(symbol_table)))
 
 class Statements(Node):
     def __init__(self, value, children):
