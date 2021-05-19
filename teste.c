@@ -1,29 +1,11 @@
 {
-    z = readln();
-    println(z);
+    int a;
+    int b;
+    int c;
 
-    a = 2;
-    b = 5;
-    {
-        x = 10;
-    }
-    c = a + b; /*comentario*/
+    a = 1;
+    b = 4; 
+    c = a + b;
     println(c);
 
-    if (2 == 2) {
-        y = 4;
-    } else {
-        y = 22;
-    }
-    println(y);
-
-    while (a < c || a == 2) {
-        println(a);
-        a = a + 1;
-    }
-
-    while (a < c && !(a == 2)) {
-        println(a);
-        a = a + 1;
-    }
 }
