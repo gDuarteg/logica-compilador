@@ -26,9 +26,20 @@ class Tokenizer:
         self.origin = str(_origin)
         self.position = 0
         self.actual = Token("INT", ' ')
+        self.PreviousPosition = 0
+        self.PreviousActual = Token("INT", ' ')
         self.selectNext()
 
+
+    def selectPrevious(self):
+        self.position = self.PreviousPosition
+        self.actual = self.PreviousActual
+        return self.actual
+
     def selectNext(self):
+        self.PreviousPosition = self.position
+        self.PreviousActual = self.actual
+
         while self.position < len(self.origin) and (self.origin[self.position] == ' ' or self.origin[self.position] == '\n'):
             self.position += 1
 
@@ -144,7 +155,7 @@ class Parser:
         while Parser.tokens.actual.type == "EQUAL":
             if Parser.tokens.actual.value == "==":
                 Parser.tokens.selectNext()
-                right = Parser.parseExpression()
+                right = Parser.relexpr()
                 left = BinOp('==',[left,right])
         return left
 
@@ -154,7 +165,7 @@ class Parser:
         while Parser.tokens.actual.type == "AND":
             if Parser.tokens.actual.value == "&&":
                 Parser.tokens.selectNext()
-                right = Parser.andexpr()
+                right = Parser.eqexpr()
                 left = BinOp('&&',[left,right])
         return left
 
@@ -164,7 +175,7 @@ class Parser:
         while Parser.tokens.actual.type == "OR":
             if Parser.tokens.actual.value == "||":
                 Parser.tokens.selectNext()
-                right = Parser.orexpr()
+                right = Parser.andexpr()
                 left = BinOp('||',[left,right])
         return left
 
@@ -225,12 +236,12 @@ class Parser:
         while Parser.tokens.actual.type == "MULT" or Parser.tokens.actual.type == "DIV":
             if Parser.tokens.actual.value == "*":
                 Parser.tokens.selectNext()
-                right = Parser.term()
+                right = Parser.factor()
                 left = BinOp('*',[left,right])
 
             if Parser.tokens.actual.value == "/":
                 Parser.tokens.selectNext()
-                right = Parser.term()
+                right = Parser.factor()
                 left = BinOp('/',[left,right])
         return left
 
@@ -285,32 +296,42 @@ class Parser:
                     while_com = Parser.command()
                     return While('', [condition, while_com])
                 else:
-                    raise ValueError("Erro")
+                    raise ValueError("while close")
+            else:
+                raise ValueError("while open")
 
         elif Parser.tokens.actual.type == "IF":
             Parser.tokens.selectNext()
-            condition = None
-            else_com = None
-            if_com = None
+            # condition = None
+            # else_com = None
+            # if_com = None
+            # print(Parser.tokens.actual.type)
             if Parser.tokens.actual.type == "OPEN":
                 Parser.tokens.selectNext()
                 condition = Parser.orexpr()
-                print(Parser.tokens.actual.type)
+                # print(Parser.tokens.actual.type)
                 if Parser.tokens.actual.type == "CLOSE":
                     Parser.tokens.selectNext()
                     if_com = Parser.command()
-
                     Parser.tokens.selectNext()
+                    
                     if Parser.tokens.actual.type == "ELSE":
                         Parser.tokens.selectNext()
                         else_com = Parser.command()
                         return If('', [condition, if_com, else_com])
+                    else:
+                        # voltar token
+                        Parser.tokens.selectPrevious()
+                        return If('', [condition, if_com])
+
+
                 else:
                     raise ValueError("Erro")
             else:
                 raise ValueError("Erro")
-            return If('', [condition, if_com, else_com])
 
+        elif Parser.tokens.actual.type == "ELSE":
+            raise ValueError("else without if")
         else:
             return NoOp("",[])
 
@@ -320,7 +341,11 @@ class Parser:
         end_semicolon = ["SEPARATOR", "IDENTIFIER", "PRINTLN"]
         if Parser.tokens.actual.type == "OPEN_BLOCK":
             Parser.tokens.selectNext()
+
             while Parser.tokens.actual.type != "CLOSE_BLOCK":
+                # print(Parser.tokens.actual.type)
+            # while Parser.tokens.actual.type != "CLOSE_BLOCK" and Parser.tokens.actual.type != "EOF":
+                # print(Parser.tokens.actual.type)
                 if Parser.tokens.actual.type in end_semicolon:
                     children.append(Parser.command())
                     if Parser.tokens.actual.type == "SEPARATOR":
@@ -331,7 +356,7 @@ class Parser:
                     children.append(Parser.command())
                     Parser.tokens.selectNext()
 
-            if Parser.tokens.actual.type == "CLOSE_BLOCK":
+            if Parser.tokens.actual.type == "CLOSE_BLOCK" or Parser.tokens.actual.type == "EOF":
                 # Parser.tokens.selectNext()
                 return Statements("", children)
         else:
@@ -392,7 +417,7 @@ class Println(Node):
         super().__init__(value, children)
     
     def Evaluate(self, symbol_table):
-        print(self.children[0].Evaluate(symbol_table))
+        print(int(self.children[0].Evaluate(symbol_table)))
 
 class Readln(Node):
     def __init__(self, value, children):
