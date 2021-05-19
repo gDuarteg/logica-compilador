@@ -4,13 +4,15 @@
 
 BLOCK = "{", { COMMAND }, "}" ; 
 
-COMMAND = ( λ | ASSIGNMENT | PRINT | BLOCK | WHILE | IF), ";" ; 
+COMMAND = ( λ | ASSIGNMENT | PRINT | BLOCK | WHILE | IF, TYPE), ";" ; 
 
 WHILE = "while", "(", OREXPR ,")", COMMAND;
 
 IF = "if", "(", OREXPR ,")", COMMAND, (("else", COMMAND) | λ );
 
 ASSIGNMENT = IDENTIFIER, "=", EXPRESSION ; 
+
+TYPE = TYPES, IDENTIFIER ;
 
 PRINT = "println", "(", OREXPR, ")" ; 
 
@@ -38,6 +40,9 @@ LETTER = ( a | ... | z | A | ... | Z ) ;
 
 DIGIT = ( 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 0 ) ;
 
+TYPES = ("int" | "bool", "string") ;
+
+BOOL = ("true" | "false"    )
 
 ## Diagrama Sintático
 

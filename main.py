@@ -424,8 +424,12 @@ class While(Node):
         super().__init__(value, children)
 
     def Evaluate(self, symbol_table):
-        while self.children[0].Evaluate(symbol_table) == True:
-            self.children[1].Evaluate(symbol_table)
+        x = self.children[0].Evaluate(symbol_table)
+        if x[1] == "BOOL":
+            while x[0]:
+                self.children[1].Evaluate(symbol_table)
+        else:
+            raise ValueError('While bool')
 
 class If(Node):
     def __init__(self, value, children):
@@ -434,7 +438,7 @@ class If(Node):
     def Evaluate(self, symbol_table):
         x = self.children[0].Evaluate(symbol_table)
         if x[1] == "BOOL":
-            if self.children[0].Evaluate(symbol_table) == True:
+            if x[0] == True:
                 return self.children[1].Evaluate(symbol_table)
             elif len(self.children) == 3:
                 return self.children[2].Evaluate(symbol_table)
@@ -498,18 +502,20 @@ class BinOp(Node):
                 return (x[0] * y[0], "INT")
             elif self.value == "/":
                 return (x[0] / y[0], "INT")
+            elif self.value == ">":
+                return (x[0] > y[0], "BOOL")
+            
+            elif self.value == "<":
+                return (x[0] < y[0], "BOOL")
+            
+            elif self.value == "==":
+                return (x[0] == y[0], "BOOL")
         
         elif x[1] == "BOOL" and y[1] == "BOOL":
-            if self.value == "==":
-                return (x[0] == y[0], "BOOL")
-            elif self.value == "&&":
+            if self.value == "&&":
                 return (x[0] and y[0], "BOOL")
             elif self.value == "||":
                 return (x[0] or y[0], "BOOL")
-            elif self.value == ">":
-                return (x[0] > y[0], "BOOL")
-            elif self.value == "<":
-                return (x[0] < y[0], "BOOL")
         else:
             raise ValueError('Erro BinOp')
         
