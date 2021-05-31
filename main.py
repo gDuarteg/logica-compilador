@@ -1,7 +1,100 @@
+from io import SEEK_CUR
 import sys
 import re
 
 reserved = ["println", "readln", "while", "if", "else", "and", "or", "int", "bool", "string", "true", "false"]
+
+asm_end = """
+POP EBP
+MOV EAX, 1
+INT 0x80
+"""
+
+asm_start = """
+; constantes
+SYS_EXIT equ 1
+SYS_READ equ 3
+SYS_WRITE equ 4
+STDIN equ 0
+STDOUT equ 1
+True equ 1
+False equ 0
+
+segment .data
+
+segment .bss  ; variaveis
+  res RESB 1
+
+section .text
+  global _start
+
+print:  ; subrotina print
+
+  PUSH EBP ; guarda o base pointer
+  MOV EBP, ESP ; estabelece um novo base pointer
+
+  MOV EAX, [EBP+8] ; 1 argumento antes do RET e EBP
+  XOR ESI, ESI
+
+print_dec: ; empilha todos os digitos
+  MOV EDX, 0
+  MOV EBX, 0x000A
+  DIV EBX
+  ADD EDX, '0'
+  PUSH EDX
+  INC ESI ; contador de digitos
+  CMP EAX, 0
+  JZ print_next ; quando acabar pula
+  JMP print_dec
+
+print_next:
+  CMP ESI, 0
+  JZ print_exit ; quando acabar de imprimir
+  DEC ESI
+
+  MOV EAX, SYS_WRITE
+  MOV EBX, STDOUT
+
+  POP ECX
+  MOV [res], ECX
+  MOV ECX, res
+
+  MOV EDX, 1
+  INT 0x80
+  JMP print_next
+
+print_exit:
+  POP EBP
+  RET
+
+; subrotinas if/while
+binop_je:
+  JE binop_true
+  JMP binop_false
+
+binop_jg:
+  JG binop_true
+  JMP binop_false
+
+binop_jl:
+  JL binop_true
+  JMP binop_false
+
+binop_false:
+  MOV EBX, False
+  JMP binop_exit
+binop_true:
+  MOV EBX, True
+binop_exit:
+  RET
+
+_start:
+
+  PUSH EBP ; guarda o base pointer
+  MOV EBP, ESP ; estabelece um novo base pointer
+
+  ; codigo gerado pelo compilador
+"""
 
 class SymbolTable():
     def __init__(self):
@@ -415,47 +508,57 @@ class Node:
     def __init__(self, _value, _children):
         self.value = _value
         self.children = _children
+        self.i = 0
     
     def Evaluate(self, symbol_table):
         pass
 
+    @staticmethod
+    def newId(self):
+        self.i += 1
+        return self.i
+
 class While(Node):
     def __init__(self, value, children):
-        super().__init__(value, children)
+        super().__init__(value, children, Node.newId())
 
     def Evaluate(self, symbol_table):
         x = self.children[0].Evaluate(symbol_table)
         if x[1] == "BOOL":
             while x[0]:
+                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
                 self.children[1].Evaluate(symbol_table)
         else:
             raise ValueError('While bool')
 
 class If(Node):
     def __init__(self, value, children):
-        super().__init__(value, children)
+        super().__init__(value, children, Node.newId())
 
     def Evaluate(self, symbol_table):
         x = self.children[0].Evaluate(symbol_table)
         if x[1] == "BOOL":
             if x[0] == True:
+                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
                 return self.children[1].Evaluate(symbol_table)
             elif len(self.children) == 3:
+                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
                 return self.children[2].Evaluate(symbol_table)
         else:
             raise ValueError('Erro If Type')
 
 class Identifier(Node):
     def __init__(self, value, children):
-        super().__init__(value, children)
+        super().__init__(value, children, Node.newId())
     
     def Evaluate(self, symbol_table):
         st = symbol_table.getter(self.value)
+        Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
         return st 
 
 class Assignment(Node):
     def __init__(self, value, children):
-        super().__init__(value, children)
+        super().__init__(value, children, Node.newId())
 
     def Evaluate(self, symbol_table):
         key = self.children[0].value
@@ -464,9 +567,10 @@ class Assignment(Node):
 
 class Println(Node):
     def __init__(self, value, children):
-        super().__init__(value, children)
+        super().__init__(value, children, Node.newId())
     
     def Evaluate(self, symbol_table):
+        Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
         print(int(self.children[0].Evaluate(symbol_table)[0]))
 
 class Readln(Node):
@@ -478,7 +582,7 @@ class Readln(Node):
 
 class Statements(Node):
     def __init__(self, value, children):
-        super().__init__(value, children)
+        super().__init__(value, children, Node.newId())
     
     def Evaluate(self, symbol_table):        
         for child in self.children:
@@ -487,7 +591,7 @@ class Statements(Node):
 
 class BinOp(Node):
     def __init__(self, value, children):
-        super().__init__(value, children)
+        super().__init__(value, children, Node.newId())
     
     def Evaluate(self, symbol_table):
         x = self.children[0].Evaluate(symbol_table)
@@ -495,80 +599,97 @@ class BinOp(Node):
         
         if x[1] == "INT" and y[1] == "INT":
             if self.value == "+":
+                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
                 return (x[0] + y[0], "INT")
             elif self.value == "-":
+                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
                 return (x[0] - y[0], "INT")
             elif self.value == "*":
+                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
                 return (x[0] * y[0], "INT")
             elif self.value == "/":
+                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
                 return (x[0] / y[0], "INT")
             elif self.value == ">":
+                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
                 return (x[0] > y[0], "BOOL")
             
             elif self.value == "<":
+                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
                 return (x[0] < y[0], "BOOL")
             
             elif self.value == "==":
+                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
                 return (x[0] == y[0], "BOOL")
         
         elif x[1] == "BOOL" and y[1] == "BOOL":
             if self.value == "&&":
+                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
                 return (x[0] and y[0], "BOOL")
             elif self.value == "||":
+                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
                 return (x[0] or y[0], "BOOL")
         else:
             raise ValueError('Erro BinOp')
         
 class UnOp(Node):
     def __init__(self, value, children):
-        super().__init__(value, children)
+        super().__init__(value, children, Node.newId())
 
     def Evaluate(self, symbol_table):
         if self.children[0].Evaluate(symbol_table)[1] == "INT":
             if self.value == "+":
+                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
                 return (self.children[0].Evaluate(symbol_table), "INT")
             elif self.value == "-":
+                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
                 return (-self.children[0].Evaluate(symbol_table), "INT")
             elif self.value == "!":
+                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
                 return (not self.children[0].Evaluate(symbol_table), "BOOL")
             else:
                 raise ValueError('Erro')
         if self.children[0].Evaluate(symbol_table)[1] == "BOOL":
             if self.value == "!":
+                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
                 return (not self.children[0].Evaluate(symbol_table), "BOOL")
 
 
 class IntVal(Node):
     def __init__(self, value, children):
-        super().__init__(value, children)
+        super().__init__(value, children, Node.newId())
     
     def Evaluate(self, symbol_table):
+        Assembler.appendCommand(f"MOV EBX, {self.value};")
         return (self.value, "INT")
 
 class BoolVal(Node):
     def __init__(self, value, children):
-        super().__init__(value, children)
+        super().__init__(value, children, Node.newId())
     
     def Evaluate(self, symbol_table):
+        Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
         return (self.value, "BOOL")
 
 class StringVal(Node):
     def __init__(self, value, children):
-        super().__init__(value, children)
+        super().__init__(value, children, Node.newId())
     
     def Evaluate(self, symbol_table):
+        Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
         return (self.value, "STRING")
 
 class Type(Node):
     def __init__(self, value, children):
-        super().__init__(value, children)
+        super().__init__(value, children, Node.newId())
 
     def Evaluate(self, symbol_table):
+        Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
         return (self.value, "TYPE")
 
 class TypeVar(Node):
     def __init__(self, value, children):
-        super().__init__(value, children)
+        super().__init__(value, children, Node.newId())
 
     def Evaluate(self, symbol_table):
         symbol_table.typer(self.children[0], self.children[1].Evaluate(symbol_table)[0])
@@ -576,15 +697,29 @@ class TypeVar(Node):
 
 class NoOp(Node):
     def __init__(self, value, children):
-        super().__init__(value, children)
+        super().__init__(value, children, Node.newId())
 
     def Evaluate(self, symbol_table):
+        Assembler.appendCommand(f"NOP;") # FIX
         pass
 
 class PrePro:
     @staticmethod
     def filter(code):
         return re.sub(r'/\*.*?\*/',"", code)
+
+class Assembler:
+    asm_code = ""
+
+    @staticmethod
+    def appendCommand(code):
+        self.asm_code += f"{code} \n"
+    
+    @staticmethod
+    def Evaluate(file_name):
+        nasm = self.asm_start + self.asm_code + self.asm_end
+        with open(f"{file_name}.nasm", "w") as file:
+            file.write(nasm)
 
 def main(file_name):
     code = open(file_name, 'r').read()
