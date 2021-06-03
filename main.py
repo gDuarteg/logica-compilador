@@ -50,7 +50,7 @@ class Tokenizer:
         self.PreviousPosition = self.position
         self.PreviousActual = self.actual
 
-        while self.position < len(self.origin) and (self.origin[self.position] == ' ' or self.origin[self.position] == '\n'):
+        while self.position < len(self.origin) and (self.origin[self.position].isspace() or self.origin[self.position] == '\n'):
             self.position += 1
 
         if self.position == len(self.origin):
@@ -126,13 +126,24 @@ class Tokenizer:
         elif self.origin[self.position] == "|" and self.origin[self.position + 1] == "|":
             self.position += 2
             self.actual = Token('OR','||')
+        
+        elif self.origin[self.position] == '"':
+            string = ""
+            self.position += 1
+            while self.origin[self.position] != '"' and self.position < len(self.origin):
+                string = string + self.origin[self.position]
+                self.position += 1
+            self.position += 1
+            self.actual = Token('STRING', str(string))
+
 
         elif self.origin[self.position].isalpha():
             var = ""
             while self.position < len(self.origin) and ( self.origin[self.position].isalpha() or self.origin[self.position].isnumeric() or self.origin[self.position] == "_"):
+                # print(self.origin[self.position])
+                
                 var = var + self.origin[self.position]
                 self.position += 1
-
             if var not in reserved:
                 self.actual = Token('IDENTIFIER', var)
             else:
@@ -173,11 +184,13 @@ class Parser:
                 Parser.tokens.selectNext()
                 right = Parser.parseExpression()
                 left = BinOp('<',[left,right])
+                return left
 
             if Parser.tokens.actual.value == ">":
                 Parser.tokens.selectNext()
                 right = Parser.parseExpression()
                 left = BinOp('>',[left,right])
+                return left
         return left
     
     @staticmethod
@@ -188,7 +201,9 @@ class Parser:
                 Parser.tokens.selectNext()
                 right = Parser.relexpr()
                 left = BinOp('==',[left,right])
+                return left
         return left
+        
 
     @staticmethod
     def andexpr():
@@ -198,6 +213,7 @@ class Parser:
                 Parser.tokens.selectNext()
                 right = Parser.eqexpr()
                 left = BinOp('&&',[left,right])
+                return left
         return left
 
     @staticmethod
@@ -227,8 +243,10 @@ class Parser:
             return BoolVal(result, [])
 
         elif Parser.tokens.actual.type == "STRING":
+            # print(Parser.tokens.actual.value)
             result = Parser.tokens.actual.value
             Parser.tokens.selectNext()
+            # print(Parser.tokens.actual.value)
             if Parser.tokens.actual.type == "STRING":
                 raise ValueError('Erro')
             return StringVal(result, [])
@@ -426,7 +444,7 @@ class While(Node):
     def Evaluate(self, symbol_table):
         x = self.children[0].Evaluate(symbol_table)
         if x[1] == "BOOL":
-            while x[0]:
+            while self.children[0].Evaluate(symbol_table)[0]:
                 self.children[1].Evaluate(symbol_table)
         else:
             raise ValueError('While bool')
@@ -437,13 +455,12 @@ class If(Node):
 
     def Evaluate(self, symbol_table):
         x = self.children[0].Evaluate(symbol_table)
-        if x[1] == "BOOL":
-            if x[0] == True:
-                return self.children[1].Evaluate(symbol_table)
-            elif len(self.children) == 3:
-                return self.children[2].Evaluate(symbol_table)
-        else:
-            raise ValueError('Erro If Type')
+        if x[0] == True or (x[1] == "INT" and x[0] != 0):
+            return self.children[1].Evaluate(symbol_table)
+        elif len(self.children) == 3:
+            return self.children[2].Evaluate(symbol_table)
+        # else:
+        #     raise ValueError('Erro If Type')
 
 class Identifier(Node):
     def __init__(self, value, children):
@@ -467,7 +484,7 @@ class Println(Node):
         super().__init__(value, children)
     
     def Evaluate(self, symbol_table):
-        print(int(self.children[0].Evaluate(symbol_table)[0]))
+        print(self.children[0].Evaluate(symbol_table)[0])
 
 class Readln(Node):
     def __init__(self, value, children):
@@ -492,7 +509,6 @@ class BinOp(Node):
     def Evaluate(self, symbol_table):
         x = self.children[0].Evaluate(symbol_table)
         y = self.children[1].Evaluate(symbol_table)
-        
         if x[1] == "INT" and y[1] == "INT":
             if self.value == "+":
                 return (x[0] + y[0], "INT")
@@ -501,21 +517,51 @@ class BinOp(Node):
             elif self.value == "*":
                 return (x[0] * y[0], "INT")
             elif self.value == "/":
-                return (x[0] / y[0], "INT")
+                return (x[0] // y[0], "INT")
             elif self.value == ">":
                 return (x[0] > y[0], "BOOL")
-            
             elif self.value == "<":
                 return (x[0] < y[0], "BOOL")
-            
             elif self.value == "==":
                 return (x[0] == y[0], "BOOL")
-        
+            elif self.value == "||":
+                return (x[0] == y[0], "BOOL")
+            elif self.value == "&&":
+                return (x[0] == y[0], "BOOL")
+            
         elif x[1] == "BOOL" and y[1] == "BOOL":
             if self.value == "&&":
                 return (x[0] and y[0], "BOOL")
             elif self.value == "||":
                 return (x[0] or y[0], "BOOL")
+            elif self.value == "==":
+                return (x[0] == y[0], "BOOL")
+        
+        elif (x[1] == "BOOL" and y[1] == "INT") or (x[1] == "INT" and y[1] == "BOOL"):
+            if self.value == "+":
+                return (x[0] + y[0], "INT")
+            elif self.value == "-":
+                return (x[0] - y[0], "INT")
+            elif self.value == "*":
+                return (x[0] * y[0], "INT")
+            elif self.value == "/":
+                return (x[0] / y[0], "INT")
+            elif self.value == "||":
+                return (x[0] or y[0], "INT")
+        
+        elif (x[1] == "STRING" and y[1] == "INT") or (x[1] == "INT" and y[1] == "STRING"):
+            if self.value == "*":
+                return (x[0] * y[0], "STRING")
+        
+        elif x[1] == "STRING" and y[1] == "STRING":
+            if self.value == "+":
+                return (x[0] + y[0], "STRING")
+            if self.value == "==":
+                return (x[0] == y[0], "BOOL")
+            if self.value == "&&":
+                return (x[0] and y[0], "STRING")
+            elif self.value == "||":
+                return (x[0] or y[0], "STRING")
         else:
             raise ValueError('Erro BinOp')
         
@@ -526,16 +572,17 @@ class UnOp(Node):
     def Evaluate(self, symbol_table):
         if self.children[0].Evaluate(symbol_table)[1] == "INT":
             if self.value == "+":
-                return (self.children[0].Evaluate(symbol_table), "INT")
+                return (self.children[0].Evaluate(symbol_table)[0], "INT")
             elif self.value == "-":
-                return (-self.children[0].Evaluate(symbol_table), "INT")
+                return (-self.children[0].Evaluate(symbol_table)[0], "INT")
             elif self.value == "!":
-                return (not self.children[0].Evaluate(symbol_table), "BOOL")
+                print(self.children[0].Evaluate(symbol_table))
+                return (not self.children[0].Evaluate(symbol_table)[0], "BOOL")
             else:
                 raise ValueError('Erro')
         if self.children[0].Evaluate(symbol_table)[1] == "BOOL":
             if self.value == "!":
-                return (not self.children[0].Evaluate(symbol_table), "BOOL")
+                return (not self.children[0].Evaluate(symbol_table)[0], "BOOL")
 
 
 class IntVal(Node):
