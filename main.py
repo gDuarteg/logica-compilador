@@ -211,7 +211,7 @@ class Parser:
         while Parser.tokens.actual.type == "AND":
             if Parser.tokens.actual.value == "&&":
                 Parser.tokens.selectNext()
-                right = Parser.eqexpr()
+                right = Parser.andexpr()
                 left = BinOp('&&',[left,right])
                 return left
         return left
@@ -222,7 +222,7 @@ class Parser:
         while Parser.tokens.actual.type == "OR":
             if Parser.tokens.actual.value == "||":
                 Parser.tokens.selectNext()
-                right = Parser.andexpr()
+                right = Parser.orexpr()
                 left = BinOp('||',[left,right])
         return left
 
@@ -455,12 +455,12 @@ class If(Node):
 
     def Evaluate(self, symbol_table):
         x = self.children[0].Evaluate(symbol_table)
+        if x[1] == "STRING":
+            raise ValueError('Erro If Type')
         if x[0] == True or (x[1] == "INT" and x[0] != 0):
             return self.children[1].Evaluate(symbol_table)
         elif len(self.children) == 3:
             return self.children[2].Evaluate(symbol_table)
-        # else:
-        #     raise ValueError('Erro If Type')
 
 class Identifier(Node):
     def __init__(self, value, children):
@@ -552,6 +552,8 @@ class BinOp(Node):
         elif (x[1] == "STRING" and y[1] == "INT") or (x[1] == "INT" and y[1] == "STRING"):
             if self.value == "*":
                 return (x[0] * y[0], "STRING")
+            else:
+                raise ValueError('ERRO: BinOp String + INT')
         
         elif x[1] == "STRING" and y[1] == "STRING":
             if self.value == "+":
