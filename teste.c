@@ -9,19 +9,23 @@
         y = false;
 
         a = 1;
-        b = 4; 
-
+        b = 4+4*5; 
+        println(-b);
+        println(!y);
         x = a < b;
 
         if (x || b == a || a > b) {
-            println(a);
+            println(10);
             a = a +1;
+        } else {
+            println(77777);
         }
-        if ("a" == "a") {
-            println(a);
+        if (1 == 1) {
+            println(99);
         }
 
-        while ("a" == "b" || a == 10) {
+        while (2 == 2 || a == 10) {
             a = a + 1;
         }
+        println(5);
     }
