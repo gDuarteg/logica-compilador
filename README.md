@@ -1,5 +1,7 @@
 # logica-compilador
 
+![git status](http://3.129.230.99/svg/gDuarteg/logica-compilador/)
+
 ## EBNF
 
 BLOCK = "{", { COMMAND }, "}" ; 
