@@ -1,4 +1,3 @@
-from io import SEEK_CUR
 import sys
 import re
 
@@ -94,6 +93,7 @@ _start:
   MOV EBP, ESP ; estabelece um novo base pointer
 
   ; codigo gerado pelo compilador
+
 """
 
 class SymbolTable():
@@ -143,7 +143,7 @@ class Tokenizer:
         self.PreviousPosition = self.position
         self.PreviousActual = self.actual
 
-        while self.position < len(self.origin) and (self.origin[self.position] == ' ' or self.origin[self.position] == '\n'):
+        while self.position < len(self.origin) and (self.origin[self.position].isspace() or self.origin[self.position] == '\n'):
             self.position += 1
 
         if self.position == len(self.origin):
@@ -219,13 +219,24 @@ class Tokenizer:
         elif self.origin[self.position] == "|" and self.origin[self.position + 1] == "|":
             self.position += 2
             self.actual = Token('OR','||')
+        
+        elif self.origin[self.position] == '"':
+            string = ""
+            self.position += 1
+            while self.origin[self.position] != '"' and self.position < len(self.origin):
+                string = string + self.origin[self.position]
+                self.position += 1
+            self.position += 1
+            self.actual = Token('STRING', str(string))
+
 
         elif self.origin[self.position].isalpha():
             var = ""
             while self.position < len(self.origin) and ( self.origin[self.position].isalpha() or self.origin[self.position].isnumeric() or self.origin[self.position] == "_"):
+                # print(self.origin[self.position])
+                
                 var = var + self.origin[self.position]
                 self.position += 1
-
             if var not in reserved:
                 self.actual = Token('IDENTIFIER', var)
             else:
@@ -266,11 +277,13 @@ class Parser:
                 Parser.tokens.selectNext()
                 right = Parser.parseExpression()
                 left = BinOp('<',[left,right])
+                return left
 
             if Parser.tokens.actual.value == ">":
                 Parser.tokens.selectNext()
                 right = Parser.parseExpression()
                 left = BinOp('>',[left,right])
+                return left
         return left
     
     @staticmethod
@@ -281,7 +294,9 @@ class Parser:
                 Parser.tokens.selectNext()
                 right = Parser.relexpr()
                 left = BinOp('==',[left,right])
+                return left
         return left
+        
 
     @staticmethod
     def andexpr():
@@ -289,8 +304,9 @@ class Parser:
         while Parser.tokens.actual.type == "AND":
             if Parser.tokens.actual.value == "&&":
                 Parser.tokens.selectNext()
-                right = Parser.eqexpr()
+                right = Parser.andexpr()
                 left = BinOp('&&',[left,right])
+                return left
         return left
 
     @staticmethod
@@ -299,7 +315,7 @@ class Parser:
         while Parser.tokens.actual.type == "OR":
             if Parser.tokens.actual.value == "||":
                 Parser.tokens.selectNext()
-                right = Parser.andexpr()
+                right = Parser.orexpr()
                 left = BinOp('||',[left,right])
         return left
 
@@ -505,84 +521,106 @@ class Parser:
         return result.Evaluate(symbol_table)
 
 class Node:
+    i = 0
     def __init__(self, _value, _children):
         self.value = _value
         self.children = _children
-        self.i = 0
     
     def Evaluate(self, symbol_table):
         pass
-
-    @staticmethod
-    def newId(self):
-        self.i += 1
-        return self.i
+    def newId():
+        Node.i += 1
+        return Node.i
 
 class While(Node):
     def __init__(self, value, children):
-        super().__init__(value, children, Node.newId())
+        super().__init__(value, children)
+        self.id = Node.newId()
 
     def Evaluate(self, symbol_table):
+        Assembler.appendCommand(f"LOOP_{self.id}:")
         x = self.children[0].Evaluate(symbol_table)
+
+        Assembler.appendCommand(f"CMP EBX, False")
+        Assembler.appendCommand(f"JE EXIT_{self.id}")
         if x[1] == "BOOL":
-            while x[0]:
-                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
-                self.children[1].Evaluate(symbol_table)
+            # while self.children[0].Evaluate(symbol_table)[0]:
+            self.children[1].Evaluate(symbol_table)
+            Assembler.appendCommand(f"JMP LOOP_{self.id}:")
         else:
             raise ValueError('While bool')
+        Assembler.appendCommand(f"EXIT_{self.id}:")
 
 class If(Node):
     def __init__(self, value, children):
-        super().__init__(value, children, Node.newId())
+        super().__init__(value, children)
+        self.id = Node.newId()
 
     def Evaluate(self, symbol_table):
         x = self.children[0].Evaluate(symbol_table)
-        if x[1] == "BOOL":
-            if x[0] == True:
-                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
-                return self.children[1].Evaluate(symbol_table)
-            elif len(self.children) == 3:
-                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
-                return self.children[2].Evaluate(symbol_table)
-        else:
+        if x[1] == "STRING":
             raise ValueError('Erro If Type')
+
+        Assembler.appendCommand(f"CMP EBX, False")
+        Assembler.appendCommand(f"JE ELSE_{self.id}")
+        a = True
+        if x[0] == True or (x[1] == "INT" and x[0] != 0):
+            self.children[1].Evaluate(symbol_table)
+            Assembler.appendCommand(f"JMP ENDBLOCK_{self.id}")
+            a = False
+
+        Assembler.appendCommand(f"ELSE_{self.id}")
+        if len(self.children) == 3 and a:
+            self.children[2].Evaluate(symbol_table)
+        Assembler.appendCommand(f"ENDBLOCK_{self.id}")
+        
 
 class Identifier(Node):
     def __init__(self, value, children):
-        super().__init__(value, children, Node.newId())
+        super().__init__(value, children)
+        self.id = Node.newId()
     
     def Evaluate(self, symbol_table):
         st = symbol_table.getter(self.value)
-        Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
+        Assembler.appendCommand(f"MOV EBX, [EBP -{st[0]}]")
         return st 
 
 class Assignment(Node):
     def __init__(self, value, children):
-        super().__init__(value, children, Node.newId())
+        super().__init__(value, children)
+        self.id = Node.newId()
 
     def Evaluate(self, symbol_table):
         key = self.children[0].value
         value = self.children[1].Evaluate(symbol_table)
+        Assembler.appendCommand(f"MOV [EBP-{value[0]}], EBX")
         symbol_table.setter(key, value)
 
 class Println(Node):
     def __init__(self, value, children):
-        super().__init__(value, children, Node.newId())
+        super().__init__(value, children)
+        self.id = Node.newId()
     
     def Evaluate(self, symbol_table):
-        Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
-        print(int(self.children[0].Evaluate(symbol_table)[0]))
+        self.children[0].Evaluate(symbol_table)[0]
+        # print(self.children[0].Evaluate(symbol_table)[0])
+        Assembler.appendCommand(f"PUSH EBX")
+        Assembler.appendCommand(f"CALL print")
+        Assembler.appendCommand(f"POP EBX")
+
 
 class Readln(Node):
     def __init__(self, value, children):
         super().__init__(value, children)
+        self.id = Node.newId()
     
     def Evaluate(self, symbol_table):
         return (int(input()), "INT")
 
 class Statements(Node):
     def __init__(self, value, children):
-        super().__init__(value, children, Node.newId())
+        super().__init__(value, children)
+        self.id = Node.newId()
     
     def Evaluate(self, symbol_table):        
         for child in self.children:
@@ -591,116 +629,191 @@ class Statements(Node):
 
 class BinOp(Node):
     def __init__(self, value, children):
-        super().__init__(value, children, Node.newId())
+        super().__init__(value, children)
+        self.id = Node.newId()
     
     def Evaluate(self, symbol_table):
         x = self.children[0].Evaluate(symbol_table)
         y = self.children[1].Evaluate(symbol_table)
-        
         if x[1] == "INT" and y[1] == "INT":
             if self.value == "+":
-                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
+                Assembler.appendCommand(f"ADD EAX, EBX")
+                Assembler.appendCommand(f"MOV EBX, EAX")
                 return (x[0] + y[0], "INT")
+
             elif self.value == "-":
-                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
+                Assembler.appendCommand(f"SUB EAX, EBX")
+                Assembler.appendCommand(f"MOV EBX, EAX")
                 return (x[0] - y[0], "INT")
             elif self.value == "*":
-                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
+                Assembler.appendCommand(f"IMUL EBX")
+                Assembler.appendCommand(f"MOV EBX, EAX")
                 return (x[0] * y[0], "INT")
             elif self.value == "/":
-                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
-                return (x[0] / y[0], "INT")
+                Assembler.appendCommand(f"DIV EAX, EBX")
+                Assembler.appendCommand(f"MOV EBX, EAX")
+                return (x[0] // y[0], "INT")
             elif self.value == ">":
-                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
+                Assembler.appendCommand(f"CMP EAX, EBX")
+                Assembler.appendCommand(f"CALL binop_jl")
                 return (x[0] > y[0], "BOOL")
-            
             elif self.value == "<":
-                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
+                Assembler.appendCommand(f"CMP EAX, EBX")
+                Assembler.appendCommand(f"CALL binop_jl")
                 return (x[0] < y[0], "BOOL")
-            
             elif self.value == "==":
-                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
+                Assembler.appendCommand(f"CMP EAX, EBX")
+                Assembler.appendCommand(f"CALL binop_jl")
                 return (x[0] == y[0], "BOOL")
-        
+            elif self.value == "||":
+                Assembler.appendCommand(f"OR EAX, EBX")
+                Assembler.appendCommand(f"MOV EBX, EAX")
+                return (x[0] == y[0], "BOOL")
+            elif self.value == "&&":
+                Assembler.appendCommand(f"AND EAX, EBX")
+                Assembler.appendCommand(f"MOV EBX, EAX")
+                return (x[0] == y[0], "BOOL")
+            
         elif x[1] == "BOOL" and y[1] == "BOOL":
             if self.value == "&&":
-                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
+                Assembler.appendCommand(f"AND EAX, EBX")
+                Assembler.appendCommand(f"MOV EBX, EAX")
                 return (x[0] and y[0], "BOOL")
             elif self.value == "||":
-                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
+                Assembler.appendCommand(f"OR EAX, EBX")
+                Assembler.appendCommand(f"MOV EBX, EAX")
                 return (x[0] or y[0], "BOOL")
+            elif self.value == "==":
+                Assembler.appendCommand(f"CMP EAX, EBX")
+                Assembler.appendCommand(f"CALL binop_jl")
+                return (x[0] == y[0], "BOOL")
+        
+        elif (x[1] == "BOOL" and y[1] == "INT") or (x[1] == "INT" and y[1] == "BOOL"):
+            if self.value == "+":
+                Assembler.appendCommand(f"ADD EAX, EBX")
+                Assembler.appendCommand(f"MOV EBX, EAX")
+                return (x[0] + y[0], "INT")
+            elif self.value == "-":
+                Assembler.appendCommand(f"SUB EAX, EBX")
+                Assembler.appendCommand(f"MOV EBX, EAX")
+                return (x[0] - y[0], "INT")
+            elif self.value == "*":
+                Assembler.appendCommand(f"IMUL EBX")
+                Assembler.appendCommand(f"MOV EBX, EAX")
+                return (x[0] * y[0], "INT")
+            elif self.value == "/":
+                Assembler.appendCommand(f"DIV EAX, EBX")
+                Assembler.appendCommand(f"MOV EBX, EAX")
+                return (x[0] / y[0], "INT")
+            elif self.value == "||":
+                Assembler.appendCommand(f"OR EAX, EBX")
+                Assembler.appendCommand(f"MOV EBX, EAX")
+                return (x[0] or y[0], "INT")
+        
+        elif (x[1] == "STRING" and y[1] == "INT") or (x[1] == "INT" and y[1] == "STRING"):
+            if self.value == "*":
+                Assembler.appendCommand(f"IMUL EBX")
+                Assembler.appendCommand(f"MOV EBX, EAX")
+                return (x[0] * y[0], "STRING")
+            else:
+                raise ValueError('ERRO: BinOp String + INT')
+        
+        elif x[1] == "STRING" and y[1] == "STRING":
+            if self.value == "+":
+                Assembler.appendCommand(f"ADD EAX, EBX")
+                Assembler.appendCommand(f"MOV EBX, EAX")
+                return (x[0] + y[0], "STRING")
+            if self.value == "==":
+
+                return (x[0] == y[0], "BOOL")
+            if self.value == "&&":
+                Assembler.appendCommand(f"AND EAX, EBX")
+                Assembler.appendCommand(f"MOV EBX, EAX")
+                return (x[0] and y[0], "STRING")
+            elif self.value == "||":
+                Assembler.appendCommand(f"OR EAX, EBX")
+                Assembler.appendCommand(f"MOV EBX, EAX")
+                return (x[0] or y[0], "STRING")
         else:
             raise ValueError('Erro BinOp')
         
 class UnOp(Node):
     def __init__(self, value, children):
-        super().__init__(value, children, Node.newId())
+        super().__init__(value, children)
+        self.id = Node.newId()
 
     def Evaluate(self, symbol_table):
-        if self.children[0].Evaluate(symbol_table)[1] == "INT":
+        res = self.children[0].Evaluate(symbol_table)
+        if res[1] == "INT":
             if self.value == "+":
-                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
-                return (self.children[0].Evaluate(symbol_table), "INT")
+                Assembler.appendCommand(f"MOV EBX, {res[0]}")
+                return (res[0], "INT")
+
             elif self.value == "-":
-                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
-                return (-self.children[0].Evaluate(symbol_table), "INT")
+                Assembler.appendCommand(f"MOV EBX, -{res[0]}")
+                return (-res[0], "INT")
             elif self.value == "!":
-                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
-                return (not self.children[0].Evaluate(symbol_table), "BOOL")
+                Assembler.appendCommand(f"MOV EBX, !{res[0]}")
+                return (not res[0], "BOOL")
             else:
                 raise ValueError('Erro')
-        if self.children[0].Evaluate(symbol_table)[1] == "BOOL":
+        if res[1] == "BOOL":
             if self.value == "!":
-                Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
-                return (not self.children[0].Evaluate(symbol_table), "BOOL")
+                Assembler.appendCommand(f"MOV EBX, !{res[0]}")
+                return (not res[0], "BOOL")
 
 
 class IntVal(Node):
     def __init__(self, value, children):
-        super().__init__(value, children, Node.newId())
+        super().__init__(value, children)
+        self.id = Node.newId()
     
     def Evaluate(self, symbol_table):
-        Assembler.appendCommand(f"MOV EBX, {self.value};")
+        Assembler.appendCommand(f"MOV EBX, {self.value}")
         return (self.value, "INT")
 
 class BoolVal(Node):
     def __init__(self, value, children):
-        super().__init__(value, children, Node.newId())
+        super().__init__(value, children)
+        self.id = Node.newId()
     
     def Evaluate(self, symbol_table):
-        Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
+        Assembler.appendCommand(f"MOV EBX, {self.value}")
         return (self.value, "BOOL")
 
 class StringVal(Node):
     def __init__(self, value, children):
-        super().__init__(value, children, Node.newId())
+        super().__init__(value, children)
+        self.id = Node.newId()
     
     def Evaluate(self, symbol_table):
-        Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
+        # Assembler.appendCommand(f"MOV EBX, string")
         return (self.value, "STRING")
 
 class Type(Node):
     def __init__(self, value, children):
-        super().__init__(value, children, Node.newId())
+        super().__init__(value, children)
+        self.id = Node.newId()
 
     def Evaluate(self, symbol_table):
-        Assembler.appendCommand(f"MOV EBX, {self.value};") # FIX
         return (self.value, "TYPE")
 
 class TypeVar(Node):
     def __init__(self, value, children):
-        super().__init__(value, children, Node.newId())
+        super().__init__(value, children)
+        self.id = Node.newId()
 
     def Evaluate(self, symbol_table):
+        Assembler.appendCommand(f"PUSH DWORD 0")
         symbol_table.typer(self.children[0], self.children[1].Evaluate(symbol_table)[0])
 
 
 class NoOp(Node):
     def __init__(self, value, children):
-        super().__init__(value, children, Node.newId())
+        super().__init__(value, children)
+        self.id = Node.newId()
 
     def Evaluate(self, symbol_table):
-        Assembler.appendCommand(f"NOP;") # FIX
         pass
 
 class PrePro:
@@ -713,18 +826,19 @@ class Assembler:
 
     @staticmethod
     def appendCommand(code):
-        self.asm_code += f"{code} \n"
+        Assembler.asm_code += f"{code}\n"
     
     @staticmethod
     def Evaluate(file_name):
-        nasm = self.asm_start + self.asm_code + self.asm_end
-        with open(f"{file_name}.nasm", "w") as file:
+        nasm = asm_start + Assembler.asm_code + asm_end
+        with open(f"{file_name}.asm", "w") as file:
             file.write(nasm)
 
 def main(file_name):
     code = open(file_name, 'r').read()
     code = PrePro.filter(code)
     result = Parser.run(code)
+    Assembler.Evaluate(file_name.split(".")[0])
     return result
 
 if __name__ == "__main__":
