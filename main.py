@@ -1,13 +1,17 @@
 import sys
 import re
 
-reserved = ["println", "readln", "while", "if", "else", "and", "or", "int", "bool", "string", "true", "false"]
+reserved = ["println", "readln", "while", "if", "else", "and", "or", "int", "bool", "string", "true", "false", "return"]
+
+func_st = {}
 
 class SymbolTable():
     def __init__(self):
         self.st = dict()
+        # self.last = None
     
     def setter(self, key, value):
+        # print(self.st)
         if key in self.st.keys():
             self.st[key][0] = value
             return
@@ -16,7 +20,8 @@ class SymbolTable():
 
     def getter(self, key):
         if key in self.st.keys():
-            return (self.st.get(key)[0])
+            return (self.st.get(key))
+
         else:
             raise ValueError("Erro Semantico")
 
@@ -99,6 +104,10 @@ class Tokenizer:
             self.position += 1
             self.actual = Token('SEPARATOR',';')
 
+        elif self.origin[self.position] == ",":
+            self.position += 1
+            self.actual = Token('COMMA',',')
+
         elif self.origin[self.position] == "{":
             self.position += 1
             self.actual = Token('OPEN_BLOCK','{')
@@ -140,7 +149,6 @@ class Tokenizer:
         elif self.origin[self.position].isalpha():
             var = ""
             while self.position < len(self.origin) and ( self.origin[self.position].isalpha() or self.origin[self.position].isnumeric() or self.origin[self.position] == "_"):
-                # print(self.origin[self.position])
                 
                 var = var + self.origin[self.position]
                 self.position += 1
@@ -276,9 +284,21 @@ class Parser:
             return UnOp('!', [result])
 
         elif Parser.tokens.actual.type == "IDENTIFIER":
-            result = Identifier(Parser.tokens.actual.value, [])
+            identifier = Identifier(Parser.tokens.actual.value, [])
             Parser.tokens.selectNext()
-            return result
+            func_var = []
+            if Parser.tokens.actual.type == "OPEN":
+                Parser.tokens.selectNext()
+                while Parser.tokens.actual.type != "CLOSE":
+                    func_var.append(Parser.orexpr())
+                    if Parser.tokens.actual.type == "COMMA":
+                        Parser.tokens.selectNext()
+                
+                if Parser.tokens.actual.type == "CLOSE":
+                    Parser.tokens.selectNext()
+                    return FuncCall(identifier.value, func_var)
+            else:         
+                return identifier
 
         elif Parser.tokens.actual.type == "READLN":
             Parser.tokens.selectNext()
@@ -323,11 +343,81 @@ class Parser:
                 left = BinOp('-',[left,right])
         return left
 
+    @staticmethod #v2.4
+    def funcdefblock():
+        children = []
+        while Parser.tokens.actual.type != "EOF":
+
+            if Parser.tokens.actual.type == "TYPE":
+                _type = Parser.typeexpr()
+                # Parser.tokens.selectNext()
+
+                if Parser.tokens.actual.type == "IDENTIFIER":
+                    identifier = Parser.tokens.actual.value
+                    Parser.tokens.selectNext()
+                    
+                    func_varDec = [TypeVar(identifier,[identifier, _type])]
+                    
+                    if Parser.tokens.actual.type == "OPEN":
+                        Parser.tokens.selectNext()
+
+                        while Parser.tokens.actual.type != "CLOSE":
+                            # print("1: ",Parser.tokens.actual.value)
+                            if Parser.tokens.actual.type == "TYPE":
+                                func_params_type = Parser.typeexpr()
+                                # Parser.tokens.selectNext()
+
+                                if Parser.tokens.actual.type == "IDENTIFIER":
+                                    func_params_identifier = Parser.tokens.actual.value#Identifier(Parser.tokens.actual.value, [])
+                                    func_varDec.append(TypeVar(func_params_identifier, [func_params_identifier, func_params_type]))
+                                    Parser.tokens.selectNext()
+                                else:
+                                    raise ValueError("ERRO  FUNC Type Identifier not found")
+                                
+                                if Parser.tokens.actual.type == "COMMA":
+
+                                    if Parser.tokens.actual.type == "CLOSE":
+                                        raise ValueError("Error: FUNC COMMA")
+                                else:
+                                    break
+                                
+                            else:
+                                raise ValueError("Error: FUNC TYPE PARAMS")
+                            Parser.tokens.selectNext()
+
+                        Parser.tokens.selectNext()
+                        if Parser.tokens.actual.type == "OPEN_BLOCK":
+                            func_command = Parser.command()
+                            varDec = VarDec("", func_varDec)
+                            children.append(FuncDec(identifier, [varDec ,func_command]))
+                        else:
+                            raise ValueError("Error: FUNC WITHOUT COMMAND")        
+                    else:
+                        raise ValueError("Error: FUNC OPEN (")
+                else:
+                    raise ValueError("Error: FUNC IDENTIFIER")
+            Parser.tokens.selectNext()
+
+        if Parser.tokens.actual.type == "EOF":
+            children.append(FuncCall('main',[]))
+            return Statements("", children)
+
     @staticmethod
     def command():
         if Parser.tokens.actual.type == "OPEN_BLOCK":
             return Parser.block()
         
+        elif Parser.tokens.actual.type == "RETURN":
+            Parser.tokens.selectNext()
+            res = Return("", [Parser.orexpr()])
+            if Parser.tokens.actual.type != "SEPARATOR":
+                raise ValueError("Erro return ;")
+
+            while Parser.tokens.actual.type != 'CLOSE_BLOCK' or Parser.tokens.actual.type == 'EOF':
+                Parser.tokens.selectNext()
+            Parser.tokens.selectPrevious()
+            return res
+
         elif Parser.tokens.actual.type == "TYPE":
             _type = Parser.typeexpr()
             if Parser.tokens.actual.type == "IDENTIFIER":
@@ -344,6 +434,22 @@ class Parser:
                 Parser.tokens.selectNext()
                 result = Parser.orexpr()
                 return Assignment("", [identifier, result])
+
+            
+            elif Parser.tokens.actual.type == "OPEN":
+                Parser.tokens.selectNext()
+                func_var = []
+                while Parser.tokens.actual.type != "CLOSE":
+                    func_var.append(Parser.orexpr())
+                    if Parser.tokens.actual.type == "COMMA":
+                        Parser.tokens.selectNext()
+                
+                if Parser.tokens.actual.type == "CLOSE":
+                    Parser.tokens.selectNext()
+                    return FuncCall(identifier.value, func_var)
+            # else:
+            #     raise ValueError("Erro Identifier Parenteses")
+            
             else:
                 raise ValueError("Erro Identifier")
 
@@ -406,7 +512,7 @@ class Parser:
         if Parser.tokens.actual.type == "OPEN_BLOCK":
             Parser.tokens.selectNext()
 
-            while Parser.tokens.actual.type != "CLOSE_BLOCK":
+            while Parser.tokens.actual.type != "CLOSE_BLOCK": #or Parser.tokens.actual == "RETURN":
                 if Parser.tokens.actual.type in end_semicolon:
                     children.append(Parser.command())
                     if Parser.tokens.actual.type == "SEPARATOR":
@@ -416,7 +522,7 @@ class Parser:
                 else:
                     children.append(Parser.command())
                     Parser.tokens.selectNext()
-            if Parser.tokens.actual.type == "CLOSE_BLOCK" or Parser.tokens.actual.type == "EOF":
+            if Parser.tokens.actual.type == "CLOSE_BLOCK": #or Parser.tokens.actual.type == "EOF":
                 # Parser.tokens.selectNext()
                 return Statements("", children)
         else:
@@ -425,7 +531,9 @@ class Parser:
     @staticmethod
     def run(code):
         Parser.tokens = Tokenizer(code)
-        result = Parser.block()
+        # result = Parser.block()
+        result = Parser.funcdefblock()
+        # print(result.children[0].children)
         symbol_table = SymbolTable()
         return result.Evaluate(symbol_table)
 
@@ -467,7 +575,7 @@ class Identifier(Node):
         super().__init__(value, children)
     
     def Evaluate(self, symbol_table):
-        st = symbol_table.getter(self.value)
+        st = symbol_table.getter(self.value)[0] ############################################################### FIX
         return st 
 
 class Assignment(Node):
@@ -484,7 +592,8 @@ class Println(Node):
         super().__init__(value, children)
     
     def Evaluate(self, symbol_table):
-        print(self.children[0].Evaluate(symbol_table)[0])
+        txt = self.children[0].Evaluate(symbol_table)
+        print(txt[0])
 
 class Readln(Node):
     def __init__(self, value, children):
@@ -500,7 +609,9 @@ class Statements(Node):
     def Evaluate(self, symbol_table):        
         for child in self.children:
             # print("child: ",child)
-            child.Evaluate(symbol_table)
+            res = child.Evaluate(symbol_table)
+            if res=="return":
+                return "return"
 
 class BinOp(Node):
     def __init__(self, value, children):
@@ -578,7 +689,7 @@ class UnOp(Node):
             elif self.value == "-":
                 return (-self.children[0].Evaluate(symbol_table)[0], "INT")
             elif self.value == "!":
-                print(self.children[0].Evaluate(symbol_table))
+                # print(self.children[0].Evaluate(symbol_table))
                 return (not self.children[0].Evaluate(symbol_table)[0], "BOOL")
             else:
                 raise ValueError('Erro')
@@ -622,6 +733,73 @@ class TypeVar(Node):
     def Evaluate(self, symbol_table):
         symbol_table.typer(self.children[0], self.children[1].Evaluate(symbol_table)[0])
 
+class Return(Node):
+    def __init__(self, value, children):
+        super().__init__(value, children)
+    
+    def Evaluate(self, symbol_table):
+        symbol_table.st["return"] = self.children
+        return "return"
+
+
+class VarDec(Node):
+    def __init__(self, value, children):
+        super().__init__(value, children)
+    
+    def Evaluate(self, symbol_table):
+        # print(self.children)
+        for dec in self.children:
+            # print(dec.children)
+            dec.Evaluate(symbol_table)
+        # symbol_table.typer(self.children[0].value, self.children[1].Evaluate(symbol_table)[0])
+        # return (self.value, "VARDEC")
+
+class FuncDec(Node):
+    def __init__(self, value, children):
+        super().__init__(value, children)
+
+    def Evaluate(self, symbol_table):
+        if self.value not in func_st.keys():
+            func_st[self.value] = self
+        else:
+            raise ValueError("Erro FuncDec ja declarada")
+
+class FuncCall(Node):
+    def __init__(self, value, children):
+        super().__init__(value, children)
+
+    def Evaluate(self, symbol_table):
+        # print(func_st)
+        # print(self.value)
+        new_ST = SymbolTable()
+        if self.value not in func_st.keys():
+            raise ValueError("Func not dec")
+            
+        funcDec = func_st[self.value]
+        # print(funcDec.children[0].children)
+
+        if len(funcDec.children[0].children)-1 != len(self.children):
+            raise ValueError("Func Params Errors")
+        
+        funcDec.children[0].Evaluate(new_ST)
+        # print(new_ST.st)
+        # print(func_st)    
+        
+        for i in range(len(self.children)):
+            arg = self.children[i].Evaluate(symbol_table)
+            if(new_ST.getter(funcDec.children[0].children[i+1].value)[1] == arg[1]):
+                # print(arg)
+                new_ST.setter(funcDec.children[0].children[i+1].value, arg)
+            else:
+                raise ValueError("Erro func call params type")
+        funcDec.children[1].Evaluate(new_ST)
+
+        if("return" in new_ST.st):
+            res = new_ST.getter("return")[0].Evaluate(new_ST)
+            ftype = funcDec.children[0].children[0].children[1].value
+            if ftype != res[1]:
+                raise ValueError("Error")
+            return res
 
 class NoOp(Node):
     def __init__(self, value, children):

@@ -1,27 +1,24 @@
-    {
-        int a;
-        int b;
-        int c;
+int soma(int x, int y) {
+    int a;
+    a = x + y;
+    return a;
+}
 
-        bool x;
-        bool y;
-
-        y = false;
-
-        a = 1;
-        b = 4; 
-
-        x = a < b;
-
-        if (x || b == a || a > b) {
-            println(a);
-            a = a +1;
-        }
-        if ("a" == "a") {
-            println(a);
-        }
-
-        while ("a" == "b" || a == 10) {
-            a = a + 1;
-        }
+int fatorial(int n){
+    println(n);
+    if(n == 0){
+        return 1;
     }
+    return n*fatorial(n-1);
+}
+
+int main() {
+    int a;
+    int b;
+    int x;
+    a = 3;
+    x = 4;
+    b = soma(a, 4);
+    x = fatorial(x);
+    println(x);
+}
