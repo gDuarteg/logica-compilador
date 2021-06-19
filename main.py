@@ -99,6 +99,7 @@ _start:
 class SymbolTable():
     def __init__(self):
         self.st = dict()
+        self.distance = 4
     
     def setter(self, key, value):
         if key in self.st.keys():
@@ -109,6 +110,7 @@ class SymbolTable():
 
     def getter(self, key):
         if key in self.st.keys():
+            # print(self.st.get(key))
             return (self.st.get(key)[0])
         else:
             raise ValueError("Erro Semantico")
@@ -117,8 +119,11 @@ class SymbolTable():
         if key in self.st.keys():
             raise ValueError("Variavel já declarada")
         else:
-            self.st[key] = [None, type]
+            self.st[key] = [None, type, self.distance]
+            self.distance += 4
             return 
+    def getDistance(self, key):
+        return self.st.get(key)[2]
         
 class Token:
     def __init__(self, _type, _value):
@@ -580,9 +585,12 @@ class Identifier(Node):
         super().__init__(value, children)
         self.id = Node.newId()
     
-    def Evaluate(self, symbol_table):
+    def Evaluate(self, symbol_table, a=True):
         st = symbol_table.getter(self.value)
-        Assembler.appendCommand(f"MOV EBX, [EBP -{st[0]}]")
+        dist = symbol_table.getDistance(self.value)
+        Assembler.appendCommand(f"MOV EBX, [EBP-{dist}]")
+        # print(self.value)
+        # Assembler.appendCommand(f"PUSH EBX")
         return st 
 
 class Assignment(Node):
@@ -593,7 +601,8 @@ class Assignment(Node):
     def Evaluate(self, symbol_table):
         key = self.children[0].value
         value = self.children[1].Evaluate(symbol_table)
-        Assembler.appendCommand(f"MOV [EBP-{value[0]}], EBX")
+        dist = symbol_table.getDistance(key)
+        Assembler.appendCommand(f"MOV [EBP-{dist}], EBX")
         symbol_table.setter(key, value)
 
 class Println(Node):
@@ -634,86 +643,106 @@ class BinOp(Node):
     
     def Evaluate(self, symbol_table):
         x = self.children[0].Evaluate(symbol_table)
+        Assembler.appendCommand(f"PUSH EBX")
         y = self.children[1].Evaluate(symbol_table)
+        Assembler.appendCommand(f"POP EAX")
         if x[1] == "INT" and y[1] == "INT":
             if self.value == "+":
                 Assembler.appendCommand(f"ADD EAX, EBX")
                 Assembler.appendCommand(f"MOV EBX, EAX")
+                # Assembler.appendCommand(f"POP EAX")
                 return (x[0] + y[0], "INT")
 
             elif self.value == "-":
                 Assembler.appendCommand(f"SUB EAX, EBX")
                 Assembler.appendCommand(f"MOV EBX, EAX")
+                # Assembler.appendCommand(f"POP EAX")
                 return (x[0] - y[0], "INT")
             elif self.value == "*":
                 Assembler.appendCommand(f"IMUL EBX")
                 Assembler.appendCommand(f"MOV EBX, EAX")
+                # Assembler.appendCommand(f"POP EAX")
                 return (x[0] * y[0], "INT")
             elif self.value == "/":
                 Assembler.appendCommand(f"DIV EAX, EBX")
                 Assembler.appendCommand(f"MOV EBX, EAX")
+                # Assembler.appendCommand(f"POP EAX")
                 return (x[0] // y[0], "INT")
             elif self.value == ">":
                 Assembler.appendCommand(f"CMP EAX, EBX")
                 Assembler.appendCommand(f"CALL binop_jl")
+                # Assembler.appendCommand(f"POP EAX")
                 return (x[0] > y[0], "BOOL")
             elif self.value == "<":
                 Assembler.appendCommand(f"CMP EAX, EBX")
                 Assembler.appendCommand(f"CALL binop_jl")
+                # Assembler.appendCommand(f"POP EAX")
                 return (x[0] < y[0], "BOOL")
             elif self.value == "==":
                 Assembler.appendCommand(f"CMP EAX, EBX")
                 Assembler.appendCommand(f"CALL binop_jl")
+                # Assembler.appendCommand(f"POP EAX")
                 return (x[0] == y[0], "BOOL")
             elif self.value == "||":
                 Assembler.appendCommand(f"OR EAX, EBX")
                 Assembler.appendCommand(f"MOV EBX, EAX")
+                # Assembler.appendCommand(f"POP EAX")
                 return (x[0] == y[0], "BOOL")
             elif self.value == "&&":
                 Assembler.appendCommand(f"AND EAX, EBX")
                 Assembler.appendCommand(f"MOV EBX, EAX")
+                # Assembler.appendCommand(f"POP EAX")
                 return (x[0] == y[0], "BOOL")
             
         elif x[1] == "BOOL" and y[1] == "BOOL":
             if self.value == "&&":
                 Assembler.appendCommand(f"AND EAX, EBX")
                 Assembler.appendCommand(f"MOV EBX, EAX")
+                
                 return (x[0] and y[0], "BOOL")
             elif self.value == "||":
                 Assembler.appendCommand(f"OR EAX, EBX")
                 Assembler.appendCommand(f"MOV EBX, EAX")
+                
                 return (x[0] or y[0], "BOOL")
             elif self.value == "==":
                 Assembler.appendCommand(f"CMP EAX, EBX")
                 Assembler.appendCommand(f"CALL binop_jl")
+                # 
                 return (x[0] == y[0], "BOOL")
         
         elif (x[1] == "BOOL" and y[1] == "INT") or (x[1] == "INT" and y[1] == "BOOL"):
             if self.value == "+":
                 Assembler.appendCommand(f"ADD EAX, EBX")
                 Assembler.appendCommand(f"MOV EBX, EAX")
+                
                 return (x[0] + y[0], "INT")
             elif self.value == "-":
                 Assembler.appendCommand(f"SUB EAX, EBX")
                 Assembler.appendCommand(f"MOV EBX, EAX")
+                
                 return (x[0] - y[0], "INT")
             elif self.value == "*":
                 Assembler.appendCommand(f"IMUL EBX")
                 Assembler.appendCommand(f"MOV EBX, EAX")
+                
                 return (x[0] * y[0], "INT")
             elif self.value == "/":
                 Assembler.appendCommand(f"DIV EAX, EBX")
                 Assembler.appendCommand(f"MOV EBX, EAX")
+                
                 return (x[0] / y[0], "INT")
             elif self.value == "||":
                 Assembler.appendCommand(f"OR EAX, EBX")
                 Assembler.appendCommand(f"MOV EBX, EAX")
+                
                 return (x[0] or y[0], "INT")
         
         elif (x[1] == "STRING" and y[1] == "INT") or (x[1] == "INT" and y[1] == "STRING"):
             if self.value == "*":
                 Assembler.appendCommand(f"IMUL EBX")
                 Assembler.appendCommand(f"MOV EBX, EAX")
+                
                 return (x[0] * y[0], "STRING")
             else:
                 raise ValueError('ERRO: BinOp String + INT')
@@ -722,6 +751,7 @@ class BinOp(Node):
             if self.value == "+":
                 Assembler.appendCommand(f"ADD EAX, EBX")
                 Assembler.appendCommand(f"MOV EBX, EAX")
+                
                 return (x[0] + y[0], "STRING")
             if self.value == "==":
 
@@ -729,10 +759,12 @@ class BinOp(Node):
             if self.value == "&&":
                 Assembler.appendCommand(f"AND EAX, EBX")
                 Assembler.appendCommand(f"MOV EBX, EAX")
+                
                 return (x[0] and y[0], "STRING")
             elif self.value == "||":
                 Assembler.appendCommand(f"OR EAX, EBX")
                 Assembler.appendCommand(f"MOV EBX, EAX")
+                
                 return (x[0] or y[0], "STRING")
         else:
             raise ValueError('Erro BinOp')
