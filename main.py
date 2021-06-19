@@ -546,7 +546,7 @@ class While(Node):
         if x[1] == "BOOL":
             # while self.children[0].Evaluate(symbol_table)[0]:
             self.children[1].Evaluate(symbol_table)
-            Assembler.appendCommand(f"JMP LOOP_{self.id}:")
+            Assembler.appendCommand(f"JMP LOOP_{self.id}")
         else:
             raise ValueError('While bool')
         Assembler.appendCommand(f"EXIT_{self.id}:")
@@ -569,10 +569,10 @@ class If(Node):
             Assembler.appendCommand(f"JMP ENDBLOCK_{self.id}")
             a = False
 
-        Assembler.appendCommand(f"ELSE_{self.id}")
+        Assembler.appendCommand(f"ELSE_{self.id}:")
         if len(self.children) == 3 and a:
             self.children[2].Evaluate(symbol_table)
-        Assembler.appendCommand(f"ENDBLOCK_{self.id}")
+        Assembler.appendCommand(f"ENDBLOCK_{self.id}:")
         
 
 class Identifier(Node):
