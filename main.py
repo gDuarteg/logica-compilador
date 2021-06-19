@@ -375,9 +375,11 @@ class Parser:
                                     raise ValueError("ERRO  FUNC Type Identifier not found")
                                 
                                 if Parser.tokens.actual.type == "COMMA":
-
+                                    Parser.tokens.selectNext()
+                                    # print(Parser.tokens.actual.type)
                                     if Parser.tokens.actual.type == "CLOSE":
                                         raise ValueError("Error: FUNC COMMA")
+                                    Parser.tokens.selectPrevious()
                                 else:
                                     break
                                 
@@ -585,6 +587,12 @@ class Assignment(Node):
     def Evaluate(self, symbol_table):
         key = self.children[0].value
         value = self.children[1].Evaluate(symbol_table)
+        valType = symbol_table.getter(key)[1]
+        if valType == "INT" and value[1]=="BOOL":
+            if value[0] == False:
+                value = (0, "INT")
+            elif value[0] == True:
+                value = (1, "INT")
         symbol_table.setter(key, value)
 
 class Println(Node):
